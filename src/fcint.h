@@ -225,11 +225,13 @@ typedef struct _FcPatternElt {
 struct _FcPattern {
     int		    num;
     int		    size;
-    intptr_t	    elts_offset;
+    FcPatternElt    *elts;
     FcRef	    ref;
 };
 
-#define FcPatternElts(p)	FcOffsetMember(p,elts_offset,FcPatternElt)
+#define FcPatternElts(p)	(FcIsEncodedOffset((p)->elts) ? \
+				 FcEncodedOffsetToPtr(p, (p)->elts, FcPatternElt) : \
+				 ((p)->elts))
 
 #define FcFontSetFonts(fs)	FcPointerMember(fs,fonts,FcPattern *)
 
@@ -367,15 +369,23 @@ typedef struct _FcCharLeaf {
 struct _FcCharSet {
     FcRef	    ref;	/* reference count */
     int		    num;	/* size of leaves and numbers arrays */
-    intptr_t	    leaves_offset;
-    intptr_t	    numbers_offset;
+    FcCharLeaf	  **leaves;
+    FcChar16	   *numbers;
 };
-
-#define FcCharSetLeaves(c)	FcOffsetMember(c,leaves_offset,intptr_t)
-#define FcCharSetLeaf(c,i)	(FcOffsetToPtr(FcCharSetLeaves(c), \
-					       FcCharSetLeaves(c)[i], \
-					       FcCharLeaf))
-#define FcCharSetNumbers(c)	FcOffsetMember(c,numbers_offset,FcChar16)
+#define FcCharSetLeaves(c)	(FcIsEncodedOffset((c)->leaves) ? \
+				 FcEncodedOffsetToPtr(c, (c)->leaves, FcCharLeaf*) : \
+				 (c)->leaves)
+static inline FcCharLeaf* FcCharSetLeaf(const struct _FcCharSet *c, size_t i)
+{
+    FcCharLeaf	**leaves =  FcCharSetLeaves(c);
+    if (FcIsEncodedOffset(leaves[i])) {
+	return FcEncodedOffsetToPtr(leaves, leaves[i], FcCharLeaf);
+    }
+    return leaves[i];
+}
+#define FcCharSetNumbers(c)	(FcIsEncodedOffset((c)->numbers) ? \
+				 FcEncodedOffsetToPtr(c, (c)->leaves, FcChar16) : \
+				 (c)->numbers)
 
 #define FCSS_DEFAULT            0 /* default behavior */
 #define FCSS_ALLOW_DUPLICATES   1 /* allows for duplicate strings in the set */

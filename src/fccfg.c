@@ -427,6 +427,7 @@ FcConfigAddCache (FcConfig *config, FcCache *cache,
 	    FcPattern	*font = FcFontSetFont (fs, i);
 	    FcChar8	*font_file;
 	    FcChar8	*relocated_font_file = NULL;
+	    assert(FcIsEncodedOffset(font->elts) && "Cache validation broken?");
 
 	    if (FcPatternObjectGetString (font, FC_FILE_OBJECT,
 					  0, &font_file) == FcResultMatch)

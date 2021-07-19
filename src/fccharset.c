@@ -37,8 +37,8 @@ FcCharSetCreate (void)
 	return 0;
     FcRefInit (&fcs->ref, 1);
     fcs->num = 0;
-    fcs->leaves_offset = 0;
-    fcs->numbers_offset = 0;
+    fcs->leaves = NULL;
+    fcs->numbers = NULL;
     return fcs;
 }
 
@@ -51,8 +51,8 @@ FcCharSetPromote (FcValuePromotionBuffer *vbuf)
 
     FcRefSetConst (&fcs->ref);
     fcs->num = 0;
-    fcs->leaves_offset = 0;
-    fcs->numbers_offset = 0;
+    fcs->leaves = NULL;
+    fcs->numbers = NULL;
 
     return fcs;
 }
@@ -150,7 +150,7 @@ FcCharSetPutLeaf (FcCharSet	*fcs,
 		  FcCharLeaf	*leaf,
 		  int		pos)
 {
-    intptr_t	*leaves = FcCharSetLeaves (fcs);
+    FcCharLeaf	**leaves = FcCharSetLeaves (fcs);
     FcChar16	*numbers = FcCharSetNumbers (fcs);
 
     ucs4 >>= 8;
@@ -177,8 +177,7 @@ FcCharSetPutLeaf (FcCharSet	*fcs,
       {
 	int i;
         unsigned int alloced = fcs->num;
-	intptr_t *new_leaves;
-	ptrdiff_t distance;
+        FcCharLeaf **new_leaves;
 
 	alloced *= 2;
 	numbers = realloc (numbers, alloced * sizeof (*numbers));
@@ -188,26 +187,29 @@ FcCharSetPutLeaf (FcCharSet	*fcs,
 	if (!new_leaves)
 	{
 	    /*
-	     * Revert the reallocation of numbers. We update numbers_offset
-	     * first in case realloc() fails.
+	     * Revert the reallocation of numbers. We update numbers first in
+	     * case realloc() fails.
 	     */
-	    fcs->numbers_offset = FcPtrToOffset (fcs, numbers);
+	    fcs->numbers = numbers;
 	    numbers = realloc (numbers, (alloced / 2) * sizeof (*numbers));
 	    /* unlikely to fail though */
 	    if (!numbers)
 		return FcFalse;
-	    fcs->numbers_offset = FcPtrToOffset (fcs, numbers);
+	    fcs->numbers = numbers;
 	    return FcFalse;
 	}
-	distance = (char *) new_leaves - (char *) leaves;
+	/* Relocate all offset-encoded leaves objects (not the ones stored as real pointers) */
 	for (i = 0; i < fcs->num; i++) {
-	    new_leaves[i] -= distance;
+	   if (FcIsEncodedOffset(new_leaves[i])) {
+		ptrdiff_t distance = (char *) new_leaves - (char *) leaves;
+		new_leaves[i] = FcOffsetEncode(FcOffsetDecode(new_leaves[i]) - distance, FcCharLeaf);
+	   }
 	}
 	leaves = new_leaves;
       }
 
-      fcs->leaves_offset = FcPtrToOffset (fcs, leaves);
-      fcs->numbers_offset = FcPtrToOffset (fcs, numbers);
+      fcs->leaves = leaves;
+      fcs->numbers = numbers;
     }
 
     memmove (leaves + pos + 1, leaves + pos,
@@ -215,7 +217,7 @@ FcCharSetPutLeaf (FcCharSet	*fcs,
     memmove (numbers + pos + 1, numbers + pos,
 	     (fcs->num - pos) * sizeof (*numbers));
     numbers[pos] = (FcChar16) ucs4;
-    leaves[pos] = FcPtrToOffset (leaves, leaf);
+    leaves[pos] = leaf;
     fcs->num++;
     return FcTrue;
 }
@@ -233,7 +235,7 @@ FcCharSetFindLeafCreate (FcCharSet *fcs, FcChar32 ucs4)
 
     pos = FcCharSetFindLeafPos (fcs, ucs4);
     if (pos >= 0)
-	return FcCharSetLeaf(fcs, pos);
+	return FcCharSetLeaf(fcs, pos); // FIXME: CHERI UBSAN triggers here
 
     leaf = calloc (1, sizeof (FcCharLeaf));
     if (!leaf)
@@ -257,8 +259,7 @@ FcCharSetInsertLeaf (FcCharSet *fcs, FcChar32 ucs4, FcCharLeaf *leaf)
     if (pos >= 0)
     {
 	free (FcCharSetLeaf (fcs, pos));
-	FcCharSetLeaves(fcs)[pos] = FcPtrToOffset (FcCharSetLeaves(fcs),
-						   leaf);
+	FcCharSetLeaves(fcs)[pos] = leaf;
 	return FcTrue;
     }
     pos = -pos - 1;
@@ -1177,24 +1178,20 @@ FcCharSetFreezeBase (FcCharSetFreezer *freezer, FcCharSet *fcs)
     ent->set.num = fcs->num;
     if (fcs->num)
     {
-	intptr_t    *ent_leaves;
+	ent->set.leaves = (FcCharLeaf **)((char *)&ent->set + sizeof (ent->set));
+	ent->set.numbers = (FcChar16 *)((char *)ent->set.leaves +
+					fcs->num * sizeof (*ent->set.leaves));
 
-	ent->set.leaves_offset = sizeof (ent->set);
-	ent->set.numbers_offset = (ent->set.leaves_offset +
-				   fcs->num * sizeof (intptr_t));
-
-	ent_leaves = FcCharSetLeaves (&ent->set);
 	for (i = 0; i < fcs->num; i++)
-	    ent_leaves[i] = FcPtrToOffset (ent_leaves,
-					   FcCharSetLeaf (fcs, i));
+	    ent->set.leaves[i] = FcCharSetLeaf(fcs, i);
 	memcpy (FcCharSetNumbers (&ent->set),
 		FcCharSetNumbers (fcs),
 		fcs->num * sizeof (FcChar16));
     }
     else
     {
-	ent->set.leaves_offset = 0;
-	ent->set.numbers_offset = 0;
+	ent->set.leaves = NULL;
+	ent->set.numbers = NULL;
     }
 
     ent->hash = hash;
@@ -1303,7 +1300,7 @@ FcCharSetFreezerDestroy (FcCharSetFreezer *freezer)
 FcBool
 FcCharSetSerializeAlloc (FcSerialize *serialize, const FcCharSet *cs)
 {
-    intptr_t	    *leaves;
+    FcCharLeaf 	   **leaves;
     FcChar16	    *numbers;
     int		    i;
 
@@ -1326,9 +1323,9 @@ FcCharSetSerializeAlloc (FcSerialize *serialize, const FcCharSet *cs)
 
     if (!FcSerializeAlloc (serialize, cs, sizeof (FcCharSet)))
 	return FcFalse;
-    if (!FcSerializeAlloc (serialize, leaves, cs->num * sizeof (intptr_t)))
+    if (!FcSerializeAlloc (serialize, leaves, cs->num * sizeof (*cs->leaves)))
 	return FcFalse;
-    if (!FcSerializeAlloc (serialize, numbers, cs->num * sizeof (FcChar16)))
+    if (!FcSerializeAlloc (serialize, numbers, cs->num * sizeof (*cs->numbers)))
 	return FcFalse;
     for (i = 0; i < cs->num; i++)
 	if (!FcSerializeAlloc (serialize, FcCharSetLeaf(cs, i),
@@ -1341,7 +1338,7 @@ FcCharSet *
 FcCharSetSerialize(FcSerialize *serialize, const FcCharSet *cs)
 {
     FcCharSet	*cs_serialized;
-    intptr_t	*leaves, *leaves_serialized;
+    FcCharLeaf	**leaves, **leaves_serialized;
     FcChar16	*numbers, *numbers_serialized;
     FcCharLeaf	*leaf, *leaf_serialized;
     int		i;
@@ -1367,16 +1364,14 @@ FcCharSetSerialize(FcSerialize *serialize, const FcCharSet *cs)
 	if (!leaves_serialized)
 	    return NULL;
 
-	cs_serialized->leaves_offset = FcPtrToOffset (cs_serialized,
-						      leaves_serialized);
+	cs_serialized->leaves = FcPtrToEncodedOffset(cs_serialized, leaves_serialized, FcCharLeaf *);
 	
 	numbers = FcCharSetNumbers (cs);
 	numbers_serialized = FcSerializePtr (serialize, numbers);
 	if (!numbers)
 	    return NULL;
 
-	cs_serialized->numbers_offset = FcPtrToOffset (cs_serialized,
-						       numbers_serialized);
+	cs_serialized->numbers = FcPtrToEncodedOffset (cs_serialized, numbers_serialized, FcChar16);
 
 	for (i = 0; i < cs->num; i++)
 	{
@@ -1385,15 +1380,14 @@ FcCharSetSerialize(FcSerialize *serialize, const FcCharSet *cs)
 	    if (!leaf_serialized)
 		return NULL;
 	    *leaf_serialized = *leaf;
-	    leaves_serialized[i] = FcPtrToOffset (leaves_serialized,
-						  leaf_serialized);
+	    leaves_serialized[i] = FcPtrToEncodedOffset (leaves_serialized, leaf_serialized, FcCharLeaf);
 	    numbers_serialized[i] = numbers[i];
 	}
     }
     else
     {
-	cs_serialized->leaves_offset = 0;
-	cs_serialized->numbers_offset = 0;
+	cs_serialized->leaves = NULL;
+	cs_serialized->numbers = NULL;
     }
 
     return cs_serialized;

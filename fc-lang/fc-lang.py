@@ -244,9 +244,9 @@ if __name__=='__main__':
     print('#define OFF0        (LEAF0 + {} * sizeof (FcCharLeaf))'.format(len(leaves)))
     print('#define NUM0        (OFF0 + {} * sizeof (uintptr_t))'.format(tn))
     print('#define SET(n)      (n * sizeof (FcLangCharSet) + offsetof (FcLangCharSet, charset))')
-    print('#define OFF(s,o)    (OFF0 + o * sizeof (uintptr_t) - SET(s))')
-    print('#define NUM(s,n)    (NUM0 + n * sizeof (FcChar16) - SET(s))')
-    print('#define LEAF(o,l)   (LEAF0 + l * sizeof (FcCharLeaf) - (OFF0 + o * sizeof (intptr_t)))')
+    print('#define OFF(s,o)    FcOffsetEncode(OFF0 + o * sizeof (FcCharLeaf *) - SET(s), FcCharLeaf *)')
+    print('#define NUM(s,n)    FcOffsetEncode(NUM0 + n * sizeof (FcChar16) - SET(s), FcChar16)')
+    print('#define LEAF(o,l)   FcOffsetEncode(LEAF0 + l * sizeof (FcCharLeaf) - (OFF0 + o * sizeof (FcCharLeaf *)), FcCharLeaf)')
     print('#define fcLangCharSets (fcLangData.langCharSets)')
     print('#define fcLangCharSetIndices (fcLangData.langIndices)')
     print('#define fcLangCharSetIndicesInv (fcLangData.langIndicesInv)')
@@ -257,7 +257,7 @@ if __name__=='__main__':
 static const struct {{
     FcLangCharSet  langCharSets[{}];
     FcCharLeaf     leaves[{}];
-    uintptr_t      leaf_offsets[{}];
+    FcCharLeaf    *leaf_offsets[{}];
     FcChar16       numbers[{}];
     {}       langIndices[{}];
     {}       langIndicesInv[{}];

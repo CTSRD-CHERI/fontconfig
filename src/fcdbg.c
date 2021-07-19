@@ -154,7 +154,6 @@ void
 FcCharSetPrint (const FcCharSet *c)
 {
     int	i, j;
-    intptr_t	*leaves = FcCharSetLeaves (c);
     FcChar16	*numbers = FcCharSetNumbers (c);
 
 #if 0
@@ -173,8 +172,7 @@ FcCharSetPrint (const FcCharSet *c)
     printf ("\n");
     for (i = 0; i < c->num; i++)
     {
-	intptr_t	leaf_offset = leaves[i];
-	FcCharLeaf	*leaf = FcOffsetToPtr (leaves, leaf_offset, FcCharLeaf);
+	FcCharLeaf	*leaf = FcCharSetLeaf (c, i);
 	
 	printf ("\t");
 	printf ("%04x:", numbers[i]);
