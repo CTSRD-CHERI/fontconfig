@@ -36,7 +36,7 @@ FcPatternCreate (void)
     memset (p, 0, sizeof (FcPattern));
     p->num = 0;
     p->size = 0;
-    p->elts_offset = FcPtrToOffset (p, NULL);
+    p->elts = NULL;
     FcRefInit (&p->ref, 1);
     return p;
 }
@@ -394,7 +394,7 @@ FcPatternCacheRewriteFile (const FcPattern *p,
     new_path = data;
 
     *new_p = *p;
-    new_p->elts_offset = FcPtrToOffset (new_p, new_elts);
+    new_p->elts = new_elts;
 
     /* Copy all but the FILE values from the cache */
     for (i = 0, j = 0; i < p->num; i++)
@@ -525,7 +525,7 @@ FcPatternObjectInsertElt (FcPattern *p, FcObject object)
 		e = (FcPatternElt *) malloc (s * sizeof (FcPatternElt));
 	    if (!e)
 		return FcFalse;
-	    p->elts_offset = FcPtrToOffset (p, e);
+	    p->elts = e;
 	    while (p->size < s)
 	    {
 		e[p->size].object = 0;
@@ -1481,8 +1481,9 @@ FcPatternSerialize (FcSerialize *serialize, const FcPattern *pat)
     if (!elts_serialized)
 	return NULL;
 
-    pat_serialized->elts_offset = FcPtrToOffset (pat_serialized,
-						 elts_serialized);
+    pat_serialized->elts = FcPtrToEncodedOffset (pat_serialized,
+						 elts_serialized,
+						 FcPatternElt);
 
     for (i = 0; i < FcPatternObjectCount (pat); i++)
     {

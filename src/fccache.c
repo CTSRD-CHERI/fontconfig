@@ -898,13 +898,15 @@ FcCacheOffsetsValid (FcCache *cache)
             FcPattern		*font = FcFontSetFont (fs, i);
             FcPatternElt	*e;
             FcValueListPtr	 l;
+            intptr_t		 elts_offset = FcOffsetDecode(font->elts);
 	    char                *last_offset;
 
             if ((char *) font < base ||
                 (char *) font > end - sizeof (FcFontSet) ||
-                font->elts_offset < 0 ||
-                font->elts_offset > end - (char *) font ||
-                font->num > (end - (char *) font - font->elts_offset) / sizeof (FcPatternElt) ||
+                !FcIsEncodedOffset(font->elts) ||
+                elts_offset < 0 ||
+                elts_offset > end - (char *) font ||
+                font->num > (end - (char *) font - elts_offset) / sizeof (FcPatternElt) ||
 		!FcRefIsConst (&font->ref))
                 return FcFalse;
 
@@ -915,7 +917,7 @@ FcCacheOffsetsValid (FcCache *cache)
 
 	    for (j = 0; j < font->num; j++)
 	    {
-		last_offset = (char *) font + font->elts_offset;
+		last_offset = (char *) font + elts_offset;
 		for (l = FcPatternEltValues(&e[j]); l; l = FcValueListNext(l))
 		{
 		    if ((char *) l < last_offset || (char *) l > end - sizeof (*l) ||
