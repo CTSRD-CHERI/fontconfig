@@ -93,17 +93,17 @@ FcSerializeHashPtr (const void *object)
 }
 
 
-#elif ((SIZEOF_VOID_P) * (CHAR_BIT)) == 64
+#else
 
 /*
  * Based on splittable64/splitmix64 from Mix13
  * https://zimbry.blogspot.com/2011/09/better-bit-mixing-improving-on.html
  * https://prng.di.unimi.it/splitmix64.c
  */
-static uintptr_t
+static ptraddr_t
 FcSerializeHashPtr (const void *object)
 {
-    uintptr_t x = (uintptr_t)object;
+    ptraddr_t x = (ptraddr_t)object;
     x ^= x >> 30;
     x *= 0xbf58476d1ce4e5b9U;
     x ^= x >> 27;
@@ -117,7 +117,7 @@ FcSerializeHashPtr (const void *object)
 static FcSerializeBucket*
 FcSerializeFind (const FcSerialize *serialize, const void *object)
 {
-    uintptr_t hash = FcSerializeHashPtr (object);
+    ptraddr_t hash = FcSerializeHashPtr (object);
     size_t buckets_count = serialize->buckets_count;
     size_t index = hash & (buckets_count-1);
     for (size_t n = 0; n < buckets_count; ++n) {
