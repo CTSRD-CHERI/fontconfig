@@ -458,7 +458,7 @@ typedef union _FcAlign {
 
 typedef struct _FcSerializeBucket {
     const void	*object; /* key */
-    uintptr_t	hash;    /* hash of key */
+    ptraddr_t	hash;    /* hash of key */
     intptr_t	offset;  /* value */
 } FcSerializeBucket;
 
