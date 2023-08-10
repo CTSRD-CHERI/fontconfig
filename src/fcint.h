@@ -384,7 +384,7 @@ static inline FcCharLeaf* FcCharSetLeaf(const struct _FcCharSet *c, size_t i)
     return leaves[i];
 }
 #define FcCharSetNumbers(c)	(FcIsEncodedOffset((c)->numbers) ? \
-				 FcEncodedOffsetToPtr(c, (c)->leaves, FcChar16) : \
+				 FcEncodedOffsetToPtr(c, (c)->numbers, FcChar16) : \
 				 (c)->numbers)
 
 #define FCSS_DEFAULT            0 /* default behavior */
