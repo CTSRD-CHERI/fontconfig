@@ -556,14 +556,8 @@ FcCharSetMerge (FcCharSet *a, const FcCharSet *b, FcBool *changed)
 	    }
 	    else
 	    {
-/*
- * TODO: add cheri support.
- * foot(1) terminal crashes here.
- */
-#if 0
 		FcCharLeaf *al = FcCharSetLeaf(a, ai);
 		FcCharSetUnionLeaf (al, al, bl);
-#endif
 	    }
 
 	    ai++;
